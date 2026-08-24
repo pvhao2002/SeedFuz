@@ -1,0 +1,11 @@
+boofuzz==0.4.2
+fastapi<1.0,>=0.115
+python-multipart<1.0,>=0.0.18
+reportlab<5.0,>=4.2
+uvicorn[standard]<1.0,>=0.32
+
+[dev]
+httpx<1.0,>=0.27
+pytest<9.0,>=8.3
+pytest-cov<7,>=6
+ruff<1.0,>=0.8

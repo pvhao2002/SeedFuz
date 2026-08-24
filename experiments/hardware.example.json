@@ -1,0 +1,19 @@
+{
+  "name": "Authorized private IoT lab",
+  "seed_path": "datasets/uploads/device_seed.pcap",
+  "protocol": "tcp",
+  "target_host": "192.168.1.50",
+  "target_port": 80,
+  "authorized": true,
+  "allow_public_target": false,
+  "max_cases": 5000,
+  "delay_seconds": 0.05,
+  "timeout_seconds": 1.0,
+  "random_seed": 1337,
+  "smart_selection": true,
+  "state_aware": true,
+  "monitor_interval": 1.0,
+  "memory_probe_url": null,
+  "crash_threshold": 2
+}
+

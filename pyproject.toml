@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seedfuz"
+version = "0.1.0"
+description = "State-aware mutational fuzzer for authorized IoT security research"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+  "boofuzz==0.4.2",
+  "fastapi>=0.115,<1.0",
+  "python-multipart>=0.0.18,<1.0",
+  "reportlab>=4.2,<5.0",
+  "uvicorn[standard]>=0.32,<1.0",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.27,<1.0", "pytest>=8.3,<9.0", "pytest-cov>=6,<7", "ruff>=0.8,<1.0"]
+
+[project.scripts]
+seedfuz = "seedfuz.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+seedfuz = ["static/*.html", "static/*.css", "static/*.js"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers"
+testpaths = ["tests"]
+markers = ["hardware: requires an explicitly authorized IoT target"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+

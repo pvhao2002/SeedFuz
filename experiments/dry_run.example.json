@@ -1,0 +1,17 @@
+{
+  "name": "Example state-aware dry run",
+  "seed_path": "datasets/sample_http.pcap",
+  "protocol": "dry-run",
+  "target_host": "127.0.0.1",
+  "target_port": 0,
+  "authorized": false,
+  "max_cases": 100,
+  "delay_seconds": 0.01,
+  "timeout_seconds": 1.0,
+  "random_seed": 1337,
+  "smart_selection": true,
+  "state_aware": true,
+  "monitor_interval": 1.0,
+  "crash_threshold": 2
+}
+

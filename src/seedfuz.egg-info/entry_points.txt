@@ -1,0 +1,2 @@
+[console_scripts]
+seedfuz = seedfuz.cli:main

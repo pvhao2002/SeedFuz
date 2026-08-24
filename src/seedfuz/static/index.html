@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SeedFuz · IoT Fuzzing Lab</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">SF</span><span>SeedFuz</span></a>
+    <div class="lab-status"><span class="pulse"></span> Phòng thí nghiệm sẵn sàng</div>
+  </header>
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">IOT SECURITY RESEARCH CONSOLE</p>
+        <h1>Từ PCAP chuẩn đến<br><em>tín hiệu lỗi có ý nghĩa.</em></h1>
+        <p class="hero-copy">Phân tích luồng giao tiếp, chọn trường nhạy cảm và theo dõi chiến dịch mutational fuzzing trong một quy trình có kiểm soát.</p>
+      </div>
+      <div class="safety-card">
+        <span class="safety-icon">◎</span>
+        <div><strong>Safety first</strong><p>Mặc định là dry-run. Chỉ fuzz thiết bị thuộc sở hữu hoặc đã được cấp phép trên mạng cô lập.</p></div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <aside class="setup panel">
+        <div class="section-heading"><span>01</span><div><p>CAPTURE</p><h2>Nạp hạt giống</h2></div></div>
+        <label class="dropzone" id="dropzone">
+          <input id="pcap-file" type="file" accept=".pcap,.cap">
+          <span class="upload-icon">⇧</span>
+          <strong>Kéo thả PCAP vào đây</strong>
+          <small>hoặc nhấn để chọn · tối đa 100 MiB</small>
+        </label>
+        <div id="capture-summary" class="capture-summary hidden"></div>
+
+        <div class="section-heading compact"><span>02</span><div><p>CAMPAIGN</p><h2>Cấu hình thử nghiệm</h2></div></div>
+        <form id="campaign-form">
+          <label>Tên chiến dịch<input name="name" value="SeedFuz dry-run" required></label>
+          <div class="field-row">
+            <label>Giao thức<select name="protocol"><option value="dry-run">Dry-run</option><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
+            <label>Số test case<input name="max_cases" type="number" value="100" min="1" max="1000000"></label>
+          </div>
+          <div id="network-fields" class="network-fields hidden">
+            <div class="field-row">
+              <label>IP thiết bị<input name="target_host" value="192.168.1.1" inputmode="decimal"></label>
+              <label>Cổng<input name="target_port" type="number" value="80" min="1" max="65535"></label>
+            </div>
+            <label class="check"><input name="authorized" type="checkbox"> Tôi xác nhận có quyền kiểm thử thiết bị này</label>
+          </div>
+          <div class="field-row">
+            <label>Seed ngẫu nhiên<input name="random_seed" type="number" value="1337"></label>
+            <label>Trễ mỗi gói (giây)<input name="delay_seconds" type="number" value="0.01" min="0" step="0.01"></label>
+          </div>
+          <label class="check"><input name="smart_selection" type="checkbox" checked> Ưu tiên trường nhạy cảm</label>
+          <label class="check"><input name="state_aware" type="checkbox" checked> Bảo toàn thứ tự state machine</label>
+          <button id="run-button" class="primary" type="submit" disabled>Bắt đầu chiến dịch <span>→</span></button>
+        </form>
+      </aside>
+
+      <section class="monitor panel">
+        <div class="monitor-head">
+          <div><p class="eyebrow">LIVE TELEMETRY</p><h2>Campaign monitor</h2></div>
+          <span id="status-badge" class="badge idle">Chưa chạy</span>
+        </div>
+        <div class="metrics">
+          <article><span>Đã gửi</span><strong id="sent">0</strong><small>test cases</small></article>
+          <article><span>Tốc độ</span><strong id="speed">0.0</strong><small>packets / second</small></article>
+          <article><span>Crash</span><strong id="crashes">0</strong><small>confirmed events</small></article>
+          <article><span>Bộ nhớ</span><strong id="memory">—</strong><small>trend / sample</small></article>
+        </div>
+        <div class="progress-block">
+          <div><span>Tiến trình</span><strong id="progress-label">0 / 0</strong></div>
+          <div class="progress-track"><i id="progress-bar"></i></div>
+        </div>
+        <div class="console-head"><span>Nhật ký sự kiện</span><button id="clear-log" type="button">Xóa màn hình</button></div>
+        <div id="event-log" class="console"><p class="muted">Tải PCAP để bắt đầu phân tích.</p></div>
+        <div id="report-actions" class="report-actions hidden">
+          <a id="csv-link" href="#">Tải CSV</a><a id="pdf-link" href="#">Tải PDF</a>
+        </div>
+      </section>
+    </section>
+
+    <section class="history-section">
+      <div class="history-head"><div><p class="eyebrow">EVIDENCE</p><h2>Lịch sử chiến dịch</h2></div><button id="refresh-history">Làm mới</button></div>
+      <div id="history" class="history"><p class="muted">Chưa có chiến dịch.</p></div>
+    </section>
+  </main>
+  <footer><span>SeedFuz · HUIT Information Security Thesis 2025–2026</span><span>Authorized research use only</span></footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>
+

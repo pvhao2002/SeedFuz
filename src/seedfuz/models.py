@@ -86,6 +86,8 @@ class CampaignMetrics:
     finished_at: str | None = None
     packets_per_second: float = 0.0
     memory_leak_rate: float | None = None
+    sensitive_fields_covered: int = 0
+    security_status: str = "pending"
     operator_counts: dict[str, int] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:

@@ -217,6 +217,15 @@ class Storage:
             ).fetchall()
         return [dict(row) | {"data": json.loads(row["data_json"])} for row in rows]
 
+    def list_alerts(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return recent security alerts across all campaigns, newest first."""
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM events WHERE kind='security-alert' ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(row) | {"data": json.loads(row["data_json"])} for row in rows]
+
     @staticmethod
     def _campaign_row(row: sqlite3.Row) -> dict[str, Any]:
         result = dict(row)

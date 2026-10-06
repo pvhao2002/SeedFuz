@@ -31,13 +31,22 @@ MAGIC = {
 }
 
 
+PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"
+_MAX_CAPTURED = 16 * 1024 * 1024
+
+
 def read_pcap(path: str | Path, max_packets: int | None = None) -> list[PacketRecord]:
-    """Read a classic PCAP and extract TCP/UDP application payloads."""
+    """Read a classic PCAP or PCAPNG capture and extract TCP/UDP payloads."""
     capture = Path(path)
     with capture.open("rb") as stream:
         header = stream.read(24)
-        if len(header) != 24 or header[:4] not in MAGIC:
-            raise PcapError("Expected a classic PCAP file (pcapng is not supported)")
+        if len(header) < 4:
+            raise PcapError("Expected a PCAP or PCAPNG capture file")
+        if header[:4] == PCAPNG_MAGIC:
+            stream.seek(0)
+            return _read_pcapng(stream, max_packets)
+        if header[:4] not in MAGIC or len(header) != 24:
+            raise PcapError("Expected a classic PCAP or PCAPNG capture file")
         order, nanos = MAGIC[header[:4]]
         _, _, _, _, snaplen, link_type = struct.unpack(f"{order}HHIIII", header[4:])
         info = PcapInfo(order, nanos, link_type, snaplen)
@@ -50,7 +59,7 @@ def read_pcap(path: str | Path, max_packets: int | None = None) -> list[PacketRe
             if len(packet_header) != 16:
                 raise PcapError("Truncated packet header")
             seconds, fraction, captured, original = struct.unpack(f"{order}IIII", packet_header)
-            if captured > max(snaplen, 16 * 1024 * 1024):
+            if captured > max(snaplen, _MAX_CAPTURED):
                 raise PcapError("Invalid captured packet length")
             raw = stream.read(captured)
             if len(raw) != captured:
@@ -59,6 +68,121 @@ def read_pcap(path: str | Path, max_packets: int | None = None) -> list[PacketRe
             packets.append(_decode(index, seconds + fraction / scale, raw, original, info))
             index += 1
         return packets
+
+
+def _read_pcapng(stream, max_packets: int | None) -> list[PacketRecord]:
+    """Read a PCAPNG capture (SHB/IDB/EPB/SPB blocks) into packet records."""
+    order = "<"
+    interfaces: list[tuple[int, int, float]] = []  # (link_type, snaplen, ts_divisor)
+    packets: list[PacketRecord] = []
+    index = 0
+    while max_packets is None or index < max_packets:
+        head = stream.read(8)
+        if not head:
+            break
+        if len(head) < 8:
+            raise PcapError("Truncated PCAPNG block header")
+        block_type = head[:4]
+        if block_type == PCAPNG_MAGIC:  # Section Header Block carries the byte order.
+            magic = stream.read(4)
+            order = ">" if magic == b"\x1a\x2b\x3c\x4d" else "<"
+            total = struct.unpack(f"{order}I", head[4:8])[0]
+            if total < 12 or total > _MAX_CAPTURED:
+                raise PcapError("Invalid PCAPNG section header length")
+            stream.read(total - 12)  # skip rest of SHB (version, section length, options, trailer)
+            interfaces.clear()
+            continue
+        total = struct.unpack(f"{order}I", head[4:8])[0]
+        if total < 12 or total > _MAX_CAPTURED:
+            raise PcapError("Invalid PCAPNG block length")
+        body = stream.read(total - 12)
+        if len(body) != total - 12 or len(stream.read(4)) != 4:
+            raise PcapError("Truncated PCAPNG block")
+        tid = struct.unpack(f"{order}I", block_type)[0]
+        if tid == 0x00000001:  # Interface Description Block
+            link_type, snaplen = struct.unpack(f"{order}HxxI", body[:8])
+            interfaces.append((link_type, snaplen, _tsresol_divisor(body[8:], order)))
+        elif tid in (0x00000006, 0x00000003):  # Enhanced / Simple Packet Block
+            rec = _pcapng_packet(tid, body, order, interfaces, index)
+            if rec is not None:
+                packets.append(rec)
+                index += 1
+    if not interfaces and not packets:
+        raise PcapError("PCAPNG file has no interface or packet blocks")
+    return packets
+
+
+def _tsresol_divisor(options: bytes, order: str) -> float:
+    """Return the timestamp divisor from an IDB if_tsresol option (default microseconds)."""
+    pos = 0
+    while pos + 4 <= len(options):
+        code, length = struct.unpack(f"{order}HH", options[pos : pos + 4])
+        value = options[pos + 4 : pos + 4 + length]
+        if code == 0:  # opt_endofopt
+            break
+        if code == 9 and length >= 1:  # if_tsresol
+            raw = value[0]
+            return float(2 ** (raw & 0x7F)) if raw & 0x80 else float(10 ** raw)
+        pos += 4 + length + (-length % 4)  # options are padded to 32-bit boundaries
+    return 1_000_000.0
+
+
+def _pcapng_packet(
+    tid: int, body: bytes, order: str, interfaces: list[tuple[int, int, float]], index: int
+) -> PacketRecord | None:
+    if tid == 0x00000006:  # Enhanced Packet Block
+        if len(body) < 20:
+            raise PcapError("Truncated PCAPNG enhanced packet block")
+        if_id, ts_high, ts_low, captured, original = struct.unpack(f"{order}IIIII", body[:20])
+        raw = body[20 : 20 + captured]
+        link_type, _, divisor = interfaces[if_id] if if_id < len(interfaces) else (1, 0, 1e6)
+        timestamp = ((ts_high << 32) | ts_low) / (divisor or 1e6)
+    else:  # Simple Packet Block uses the first interface and has no per-packet length/time.
+        if len(body) < 4 or not interfaces:
+            return None
+        original = struct.unpack(f"{order}I", body[:4])[0]
+        link_type, snaplen, _ = interfaces[0]
+        captured = min(original, snaplen) if snaplen else original
+        raw = body[4 : 4 + captured]
+        timestamp = 0.0
+    if len(raw) < captured:
+        raise PcapError("Truncated PCAPNG packet data")
+    return _decode(index, timestamp, raw, original, PcapInfo(order, False, link_type, 0))
+
+
+def _parse_ipv4(raw: bytes, offset: int) -> tuple[int, int, str, str] | None:
+    if len(raw) < offset + 20 or raw[offset] >> 4 != 4:
+        return None
+    ihl = (raw[offset] & 0x0F) * 4
+    if ihl < 20 or len(raw) < offset + ihl:
+        return None
+    protocol = raw[offset + 9]
+    source = str(ipaddress.ip_address(raw[offset + 12 : offset + 16]))
+    destination = str(ipaddress.ip_address(raw[offset + 16 : offset + 20]))
+    return protocol, offset + ihl, source, destination
+
+
+# IPv6 extension headers carry (next_header, hdr_ext_len) and are skipped to reach TCP/UDP.
+_IPV6_EXT_HEADERS = {0, 43, 60}  # hop-by-hop, routing, destination options
+
+
+def _parse_ipv6(raw: bytes, offset: int) -> tuple[int, int, str, str] | None:
+    if len(raw) < offset + 40 or raw[offset] >> 4 != 6:
+        return None
+    source = str(ipaddress.ip_address(raw[offset + 8 : offset + 24]))
+    destination = str(ipaddress.ip_address(raw[offset + 24 : offset + 40]))
+    next_header = raw[offset + 6]
+    pos = offset + 40
+    for _ in range(8):  # ponytail: cap extension-header walk; covers common IoT captures
+        if next_header in _IPV6_EXT_HEADERS and len(raw) >= pos + 2:
+            next_header, ext_len = raw[pos], raw[pos + 1]
+            pos += (ext_len + 1) * 8
+        elif next_header == 44 and len(raw) >= pos + 8:  # fragment header, fixed 8 bytes
+            next_header = raw[pos]
+            pos += 8
+        else:
+            break
+    return next_header, pos, source, destination
 
 
 def _decode(
@@ -72,18 +196,15 @@ def _decode(
     if ether_type == 0x8100 and len(raw) >= 18:  # 802.1Q VLAN
         ether_type = struct.unpack("!H", raw[16:18])[0]
         offset = 18
-    if ether_type != 0x0800 or len(raw) < offset + 20:
+    if ether_type == 0x0800:
+        parsed = _parse_ipv4(raw, offset)
+    elif ether_type == 0x86DD:
+        parsed = _parse_ipv6(raw, offset)
+    else:
         return record
-    version_ihl = raw[offset]
-    if version_ihl >> 4 != 4:
+    if parsed is None:
         return record
-    ihl = (version_ihl & 0x0F) * 4
-    if ihl < 20 or len(raw) < offset + ihl:
-        return record
-    protocol = raw[offset + 9]
-    record.source = str(ipaddress.ip_address(raw[offset + 12 : offset + 16]))
-    record.destination = str(ipaddress.ip_address(raw[offset + 16 : offset + 20]))
-    transport = offset + ihl
+    protocol, transport, record.source, record.destination = parsed
     if protocol == 6 and len(raw) >= transport + 20:
         record.protocol = "tcp"
         record.source_port, record.destination_port = struct.unpack(

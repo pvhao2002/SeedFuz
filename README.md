@@ -6,15 +6,17 @@ Project bám theo đề cương HUIT năm học 2025–2026 trong [`docs/univers
 
 ## Tính năng chính
 
-- Phân tích classic PCAP: Ethernet/VLAN, IPv4, TCP và UDP.
+- Phân tích PCAP cổ điển và PCAPNG: Ethernet/VLAN, IPv4, IPv6, TCP và UDP.
 - Tách payload, loại seed trùng và suy luận State Machine từ chuỗi gói tin.
 - Bit flipping, Byte mutation và smart-field mutation.
 - Cơ chế chọn thông minh dựa trên Header, delimiter, giá trị biên và trường độ dài nghi vấn.
 - Campaign chạy tái lập bằng random seed; có giới hạn số case và delay.
 - Chế độ `dry-run`, TCP, UDP và adapter Boofuzz 0.4.2.
-- Giám sát ping, thời điểm crash, tốc độ fuzzing và xu hướng bộ nhớ tùy chọn.
-- SQLite lưu lịch sử; xuất CSV/PDF.
-- FastAPI và dashboard trực quan để upload PCAP, chạy và theo dõi chiến dịch.
+- Giám sát black-box (ping / TCP / HTTP 5xx), ghi thời điểm crash + hex payload gây lỗi, đo tốc độ fuzzing, độ phủ trường nhạy cảm và xu hướng bộ nhớ.
+- Khôi phục tự động khi thiết bị treo và **cảnh báo trạng thái an ninh** khi phát hiện crash.
+- Script heartbeat độc lập `python -m seedfuz monitor` để đo chính xác thời điểm mất phản hồi.
+- SQLite lưu lịch sử; xuất CSV/PDF (kèm payload để tái lập).
+- FastAPI và dashboard trực quan: upload PCAP, chạy/theo dõi chiến dịch, bảng cảnh báo an ninh và lọc lịch sử.
 
 ## Kiến trúc
 
@@ -155,7 +157,12 @@ papers/            tài liệu tham khảo
 
 ## Giới hạn và lộ trình
 
-Bộ đọc hiện chỉ hỗ trợ classic PCAP/Ethernet/IPv4; PCAPNG và IPv6 chưa được xử lý. State graph là mô hình suy luận tổng quát, cần tinh chỉnh theo giao thức thật. Đo bộ nhớ cần telemetry do thiết bị cung cấp. Boofuzz adapter đã có nhưng campaign mặc định sử dụng mutator riêng để bảo đảm thuật toán smart selection của đề tài có thể đo và giải thích độc lập.
+Bộ đọc hỗ trợ PCAP cổ điển và PCAPNG trên Ethernet/VLAN, IPv4 và IPv6 (bỏ qua một số extension header IPv6 hiếm gặp). State graph là mô hình suy luận tổng quát, cần tinh chỉnh theo giao thức thật; với dịch vụ cần đăng nhập, bật `preserve_session` để giữ cố định Cookie/Authorization/token và chỉ đột biến phần payload. Giám sát black-box hỗ trợ ping, kết nối TCP và mã HTTP 5xx; đo bộ nhớ chỉ khả dụng khi thiết bị cung cấp telemetry. Boofuzz adapter đã có nhưng campaign mặc định sử dụng mutator riêng để bảo đảm thuật toán smart selection của đề tài có thể đo và giải thích độc lập.
 
 Xem trạng thái chi tiết, phần đã làm và việc còn lại tại [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+
+## Hướng dẫn chạy từng bước
+
+- 🔰 **Người mới / chạy với router WiFi:** [`docs/HUONG_DAN_ROUTER_WIFI.md`](docs/HUONG_DAN_ROUTER_WIFI.md) — hướng dẫn chi tiết từng bước, chỉ cần 1 laptop + 1 router cũ, viết cho người chưa biết gì.
+- 🧪 **Thiết lập lab & kiểm thử nâng cao:** [`docs/HUONG_DAN_CHAY_VA_TEST.md`](docs/HUONG_DAN_CHAY_VA_TEST.md).
 

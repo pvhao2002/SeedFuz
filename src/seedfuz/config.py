@@ -28,7 +28,12 @@ class CampaignConfig:
     state_aware: bool = True
     monitor_interval: float = 1.0
     memory_probe_url: str | None = None
+    monitor_tcp_port: int | None = None
+    monitor_http_url: str | None = None
+    preserve_session: bool = False
     crash_threshold: int = 2
+    recovery_command: str | None = None
+    recovery_wait_seconds: float = 0.0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CampaignConfig:
@@ -55,6 +60,8 @@ class CampaignConfig:
             raise ValueError("delay_seconds must be non-negative and timeout_seconds positive")
         if self.crash_threshold < 1:
             raise ValueError("crash_threshold must be at least 1")
+        if self.recovery_wait_seconds < 0:
+            raise ValueError("recovery_wait_seconds must be non-negative")
         if self.protocol is TransportProtocol.DRY_RUN:
             return
         if not self.authorized:

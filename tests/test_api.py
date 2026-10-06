@@ -16,3 +16,17 @@ def test_health_and_pcap_upload(sample_pcap: Path, tmp_path: Path) -> None:
             )
         assert response.status_code == 200
         assert response.json()["seed_count"] == 2
+
+
+def test_pcapng_upload_and_security_overview(sample_pcapng: Path, tmp_path: Path) -> None:
+    app = create_app(tmp_path / "api.db", tmp_path / "uploads", tmp_path / "results")
+    with TestClient(app) as client:
+        with sample_pcapng.open("rb") as stream:
+            response = client.post(
+                "/api/pcaps", files={"file": ("sample.pcapng", stream, "application/octet-stream")}
+            )
+        assert response.status_code == 200
+        assert response.json()["seed_count"] == 2
+        overview = client.get("/api/security").json()
+        assert overview["vulnerable"] == 0
+        assert overview["devices"] == [] and overview["alerts"] == []

@@ -23,6 +23,8 @@ def export_csv(storage: Storage, campaign_id: str, output: str | Path) -> Path:
         "outcome",
         "duration_ms",
         "created_at",
+        "payload_hex",
+        "response_hex",
     ]
     with path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)

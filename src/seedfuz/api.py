@@ -76,8 +76,8 @@ def create_app(
     @app.post("/api/pcaps")
     async def upload_pcap(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
         suffix = Path(file.filename or "capture.pcap").suffix.lower()
-        if suffix not in {".pcap", ".cap"}:
-            raise HTTPException(400, "Only classic .pcap/.cap files are accepted")
+        if suffix not in {".pcap", ".cap", ".pcapng"}:
+            raise HTTPException(400, "Only .pcap/.cap/.pcapng capture files are accepted")
         destination = uploads / _safe_name(file.filename or "capture.pcap")
         with destination.open("wb") as output:
             shutil.copyfileobj(file.file, output)
@@ -125,7 +125,11 @@ def create_app(
         monitor = None
         if config.protocol.value != "dry-run":
             monitor = DeviceMonitor(
-                config.target_host, config.timeout_seconds, config.memory_probe_url
+                config.target_host,
+                config.timeout_seconds,
+                config.memory_probe_url,
+                config.monitor_tcp_port,
+                config.monitor_http_url,
             )
         runner = CampaignRunner(storage, config, campaign_id, monitor=monitor)
         registry.start(campaign_id, runner)
@@ -134,6 +138,29 @@ def create_app(
     @app.get("/api/campaigns")
     def list_campaigns() -> list[dict[str, Any]]:
         return storage.list_campaigns()
+
+    @app.get("/api/security")
+    def security_overview() -> dict[str, Any]:
+        """Remote security posture across devices: per-campaign status and recent alerts."""
+        campaigns = storage.list_campaigns()
+        devices = [
+            {
+                "id": item["id"],
+                "name": item["name"],
+                "status": item["status"],
+                "target_host": item["config"].get("target_host"),
+                "protocol": item["config"].get("protocol"),
+                "security_status": item["metrics"].get("security_status", "pending"),
+                "crashes": item["metrics"].get("crashes", 0),
+            }
+            for item in campaigns
+        ]
+        return {
+            "vulnerable": sum(1 for d in devices if d["security_status"] == "vulnerable"),
+            "unreachable": sum(1 for d in devices if d["security_status"] == "unreachable"),
+            "devices": devices,
+            "alerts": storage.list_alerts(limit=50),
+        }
 
     @app.get("/api/campaigns/{campaign_id}")
     def get_campaign(campaign_id: str) -> dict[str, Any]:

@@ -53,9 +53,25 @@ async function poll() {
   try {
     const response = await fetch(`/api/campaigns/${activeCampaign}`);
     const campaign = await response.json(); updateCampaign(campaign);
+    loadSecurity();
     if (["running", "created"].includes(campaign.status)) pollTimer = setTimeout(poll, 700);
-    else { $("#run-button").disabled = false; loadHistory(); }
+    else { $("#run-button").disabled = false; loadHistory(); loadSecurity(); }
   } catch (error) { log("error", `Mất kết nối dashboard: ${error.message}`); }
+}
+
+const SECURITY_LABELS = {secure:"An toàn", vulnerable:"Phát hiện lỗ hổng", unreachable:"Mất kết nối", pending:"Đang chờ", "not-monitored":"Không giám sát", monitoring:"Đang giám sát"};
+async function loadSecurity() {
+  try {
+    const data = await (await fetch("/api/security")).json();
+    const summary = $("#security-summary");
+    if (data.vulnerable > 0) { summary.className = "badge failed"; summary.textContent = `⚠ ${data.vulnerable} thiết bị nghi lỗ hổng`; }
+    else if (data.unreachable > 0) { summary.className = "badge stopped"; summary.textContent = `${data.unreachable} thiết bị mất kết nối`; }
+    else { summary.className = "badge completed"; summary.textContent = "Không có cảnh báo"; }
+    const box = $("#security-alerts");
+    box.innerHTML = data.alerts.length
+      ? data.alerts.map((a) => `<p class="error"><time>${a.created_at.slice(11,19)}</time>[security] ${escapeHtml(a.message)}${a.data && a.data.last_payload_hex ? `<br><code>payload: ${escapeHtml(String(a.data.last_payload_hex).slice(0,96))}…</code>` : ""}</p>`).join("")
+      : '<p class="muted">Chưa có cảnh báo an ninh. Hệ thống sẽ cảnh báo khi phát hiện thiết bị sập (nghi lỗ hổng).</p>';
+  } catch (_) { /* keep prior view on transient failure */ }
 }
 
 function updateCampaign(campaign) {
@@ -83,11 +99,27 @@ function log(level, message) { const consoleEl = $("#event-log"); if (consoleEl.
 function escapeHtml(value) { const node=document.createElement("span"); node.textContent=String(value); return node.innerHTML; }
 $("#clear-log").addEventListener("click", () => $("#event-log").innerHTML='<p class="muted">Màn hình đã được xóa.</p>');
 
+let historyCache = [];
+function renderHistory() {
+  const query = ($("#history-filter").value || "").trim().toLowerCase();
+  const rows = historyCache.filter((item) =>
+    !query || item.name.toLowerCase().includes(query) || item.status.toLowerCase().includes(query)
+    || String(item.metrics.security_status || "").toLowerCase().includes(query));
+  $("#history").innerHTML = rows.length ? rows.slice(0, 12).map((item) => {
+    const sec = item.metrics.security_status || "pending";
+    const vuln = sec === "vulnerable";
+    return `<article${vuln ? ' class="vulnerable"' : ""}><h3>${escapeHtml(item.name)}</h3>`
+      + `<p><strong>${item.status}</strong> · ${item.created_at.slice(0,19).replace("T"," ")}</p>`
+      + `<p>${item.metrics.sent_cases || 0} cases · ${Number(item.metrics.packets_per_second || 0).toFixed(1)} pkt/s · ${item.metrics.crashes || 0} crash · <span class="sec-tag ${sec}">${SECURITY_LABELS[sec] || sec}</span></p></article>`;
+  }).join("") : '<p class="muted">Không có chiến dịch khớp bộ lọc.</p>';
+}
 async function loadHistory() {
   try {
-    const campaigns = await (await fetch("/api/campaigns")).json();
-    $("#history").innerHTML = campaigns.length ? campaigns.slice(0, 9).map((item) => `<article><h3>${escapeHtml(item.name)}</h3><p><strong>${item.status}</strong> · ${item.created_at.slice(0,19).replace("T"," ")}</p><p>${item.metrics.sent_cases || 0} cases · ${Number(item.metrics.packets_per_second || 0).toFixed(1)} pkt/s · ${item.metrics.crashes || 0} crash</p></article>`).join("") : '<p class="muted">Chưa có chiến dịch.</p>';
+    historyCache = await (await fetch("/api/campaigns")).json();
+    renderHistory();
   } catch (_) { /* retain prior history on transient failures */ }
 }
-$("#refresh-history").addEventListener("click", loadHistory); loadHistory();
+$("#history-filter").addEventListener("input", renderHistory);
+$("#refresh-history").addEventListener("click", loadHistory);
+loadHistory(); loadSecurity();
 

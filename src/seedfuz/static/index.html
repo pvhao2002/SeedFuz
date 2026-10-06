@@ -28,7 +28,7 @@
       <aside class="setup panel">
         <div class="section-heading"><span>01</span><div><p>CAPTURE</p><h2>Nạp hạt giống</h2></div></div>
         <label class="dropzone" id="dropzone">
-          <input id="pcap-file" type="file" accept=".pcap,.cap">
+          <input id="pcap-file" type="file" accept=".pcap,.cap,.pcapng">
           <span class="upload-icon">⇧</span>
           <strong>Kéo thả PCAP vào đây</strong>
           <small>hoặc nhấn để chọn · tối đa 100 MiB</small>
@@ -82,8 +82,22 @@
       </section>
     </section>
 
+    <section class="security-section panel">
+      <div class="history-head">
+        <div><p class="eyebrow">REMOTE MONITORING</p><h2>Cảnh báo trạng thái an ninh</h2></div>
+        <span id="security-summary" class="badge idle">Chưa có dữ liệu</span>
+      </div>
+      <div id="security-alerts" class="console"><p class="muted">Chưa có cảnh báo an ninh. Hệ thống sẽ cảnh báo khi phát hiện thiết bị sập (nghi lỗ hổng).</p></div>
+    </section>
+
     <section class="history-section">
-      <div class="history-head"><div><p class="eyebrow">EVIDENCE</p><h2>Lịch sử chiến dịch</h2></div><button id="refresh-history">Làm mới</button></div>
+      <div class="history-head">
+        <div><p class="eyebrow">EVIDENCE</p><h2>Lịch sử chiến dịch</h2></div>
+        <div class="history-tools">
+          <input id="history-filter" type="search" placeholder="Lọc theo tên / trạng thái…" aria-label="Lọc lịch sử">
+          <button id="refresh-history">Làm mới</button>
+        </div>
+      </div>
       <div id="history" class="history"><p class="muted">Chưa có chiến dịch.</p></div>
     </section>
   </main>

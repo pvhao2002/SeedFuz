@@ -16,6 +16,23 @@ def test_reads_tcp_payloads(sample_pcap: Path) -> None:
     assert usable_seeds(packets) == [b"GET / HTTP/1.0\r\n\r\n", b"USER admin\r\n"]
 
 
+def test_reads_pcapng_payloads(sample_pcapng: Path) -> None:
+    packets = read_pcap(sample_pcapng)
+    assert len(packets) == 2
+    assert packets[0].protocol == "tcp"
+    assert packets[0].destination_port == 80
+    assert usable_seeds(packets) == [b"GET / HTTP/1.0\r\n\r\n", b"USER admin\r\n"]
+
+
+def test_reads_ipv6_tcp(ipv6_pcap: Path) -> None:
+    packets = read_pcap(ipv6_pcap)
+    assert len(packets) == 1
+    assert packets[0].protocol == "tcp"
+    assert packets[0].source == "2001:db8::1"
+    assert packets[0].destination == "2001:db8::2"
+    assert packets[0].payload == b"POST /login HTTP/1.1\r\n\r\n"
+
+
 def test_rejects_non_pcap(tmp_path: Path) -> None:
     invalid = tmp_path / "bad.pcap"
     invalid.write_bytes(b"not a capture")

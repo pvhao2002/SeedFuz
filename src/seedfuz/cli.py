@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="seedfuz", description="Authorized IoT mutational fuzzing"
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
-    analyze = subcommands.add_parser("analyze", help="inspect a classic PCAP")
+    analyze = subcommands.add_parser("analyze", help="inspect a PCAP/PCAPNG capture")
     analyze.add_argument("pcap")
     analyze.add_argument("--json", action="store_true")
     run = subcommands.add_parser("run", help="run a campaign from JSON configuration")
@@ -33,6 +33,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve = subcommands.add_parser("serve", help="start the API and dashboard")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    mon = subcommands.add_parser(
+        "monitor", help="standalone heartbeat: report when a target stops responding"
+    )
+    mon.add_argument("--host", required=True)
+    mon.add_argument("--tcp-port", type=int)
+    mon.add_argument("--http-url")
+    mon.add_argument("--interval", type=float, default=1.0)
+    mon.add_argument("--timeout", type=float, default=1.0)
+    mon.add_argument("--count", type=int, default=0, help="number of samples (0 = until Ctrl+C)")
     return parser
 
 
@@ -63,7 +72,13 @@ def main(argv: list[str] | None = None) -> int:
         storage = Storage(args.database)
         campaign_id = storage.create_campaign(config.name, config.to_dict())
         monitor = (
-            DeviceMonitor(config.target_host, config.timeout_seconds, config.memory_probe_url)
+            DeviceMonitor(
+                config.target_host,
+                config.timeout_seconds,
+                config.memory_probe_url,
+                config.monitor_tcp_port,
+                config.monitor_http_url,
+            )
             if config.protocol.value != "dry-run"
             else None
         )
@@ -85,7 +100,37 @@ def main(argv: list[str] | None = None) -> int:
 
         uvicorn.run("seedfuz.api:app", host=args.host, port=args.port, reload=False)
         return 0
+    if args.command == "monitor":
+        return _run_monitor(args)
     return 2
+
+
+def _run_monitor(args: argparse.Namespace) -> int:
+    import time
+
+    monitor = DeviceMonitor(
+        args.host, args.timeout, tcp_port=args.tcp_port, http_url=args.http_url
+    )
+    started = time.perf_counter()
+    was_alive = True
+    taken = 0
+    try:
+        while args.count == 0 or taken < args.count:
+            sample = monitor.sample()
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            state = "UP  " if sample.alive else "DOWN"
+            print(f"{sample.timestamp} {state} +{elapsed_ms:9.1f}ms  {sample.detail}")
+            if was_alive and not sample.alive:
+                print(f"  >> target went DOWN at {sample.timestamp} ({elapsed_ms:.1f} ms in)")
+            elif not was_alive and sample.alive:
+                print(f"  >> target back UP at {sample.timestamp} ({elapsed_ms:.1f} ms in)")
+            was_alive = sample.alive
+            taken += 1
+            if args.count == 0 or taken < args.count:
+                time.sleep(max(args.interval, 0.0))
+    except KeyboardInterrupt:
+        return 0
+    return 0
 
 
 def _human_analysis(result: dict[str, object]) -> str:

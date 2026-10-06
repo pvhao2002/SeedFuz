@@ -9,16 +9,16 @@ Tài liệu này hướng dẫn toàn bộ quy trình từ dựng mạng lab cô
 SeedFuz hiện hỗ trợ:
 
 - Python 3.10 trở lên; Ubuntu hoặc Kali Linux là môi trường chính.
-- Classic PCAP với Ethernet/VLAN, IPv4, TCP và UDP.
+- PCAP cổ điển và PCAPNG với Ethernet/VLAN, IPv4, IPv6, TCP và UDP.
 - Phân tích payload, suy luận state graph, bit flipping, byte mutation và chọn trường nhạy cảm.
 - Campaign `dry-run`, TCP hoặc UDP.
 - Lưu SQLite, xuất CSV/PDF và theo dõi qua Web Dashboard.
-- Ping mục tiêu để phát hiện thời điểm mất phản hồi.
+- Giám sát black-box: ping, kết nối TCP (`monitor_tcp_port`) hoặc mã HTTP 5xx (`monitor_http_url`) để phát hiện thời điểm mất phản hồi.
 - Đọc telemetry bộ nhớ nếu thiết bị cung cấp HTTP endpoint trả JSON có trường `memory_percent`.
 
 Các giới hạn cần nhớ:
 
-- Chưa hỗ trợ PCAPNG và IPv6.
+- Hỗ trợ PCAP cổ điển và PCAPNG, IPv4 và IPv6; một số extension header IPv6 hiếm gặp có thể bị bỏ qua.
 - PCAP phải có payload ứng dụng TCP/UDP không rỗng; chỉ có ARP, ICMP, TCP handshake hoặc ACK sẽ không tạo được seed.
 - TCP transport hiện mở một kết nối mới cho mỗi test case. Giao thức cần phiên đăng nhập dài, TLS, token động hoặc nhiều bước phức tạp có thể cần bổ sung adapter riêng.
 - Dashboard chưa có đăng nhập. Chỉ chạy trên `127.0.0.1` hoặc mạng lab tin cậy.
@@ -609,7 +609,7 @@ Ghi nhật ký thời điểm và thao tác để sau này giải thích state g
 
 8. Xem `Follow TCP Stream` hoặc payload để chắc chắn có dữ liệu ứng dụng.
 9. Chọn **File → Save As**.
-10. Chọn định dạng **Wireshark/tcpdump/... - pcap**, không chọn pcapng.
+10. Lưu định dạng nào cũng được — SeedFuz đọc được cả **pcap** cổ điển lẫn **pcapng**.
 11. Lưu thành `datasets/uploads/device_seed.pcap`.
 
 ### 9.5. Capture bằng tcpdump
@@ -648,7 +648,7 @@ seedfuz analyze datasets/uploads/device_seed.pcap --json
 
 Không chạy fuzzing nếu:
 
-- Parser báo không phải classic PCAP.
+- Parser báo không phải file PCAP/PCAPNG hợp lệ.
 - `seeds` bằng 0.
 - Protocol/port không đúng dịch vụ dự kiến.
 - Capture chứa dữ liệu nhạy cảm không nên lưu.
@@ -917,7 +917,7 @@ Khi sao lưu kết quả, tạo thư mục ngoài Git hoặc trong khu vực lư
 | Python dưới 3.10 | Hệ điều hành quá cũ | Cài Python 3.10+ rồi tạo lại `.venv`; không di chuyển/reuse venv cũ |
 | `dumpcap -D` không thấy interface | Sai quyền hoặc interface chưa up | Kiểm tra `ip -br link`, nhóm `wireshark`, đăng nhập lại; chạy `dpkg-reconfigure wireshark-common` |
 | `Permission denied` khi capture | User chưa có quyền dumpcap | Không chạy GUI bằng root; cấu hình nhóm/quyền Wireshark như mục 4.3 |
-| SeedFuz báo chỉ nhận classic PCAP | File đang là PCAPNG | Wireshark Save As → pcap hoặc capture lại bằng `tcpdump -w` |
+| SeedFuz báo file không hợp lệ | File không phải PCAP/PCAPNG (ví dụ bị hỏng) | Lưu lại từ Wireshark (pcap hoặc pcapng đều được) |
 | `PCAP contains no non-empty TCP/UDP application payloads` | Capture chỉ có handshake/ACK/ICMP hoặc sai filter | Tạo lại lưu lượng ứng dụng, kiểm tra Follow Stream và capture đúng IP/port |
 | `target_host must be an explicit IP address` | Dùng hostname | Thay bằng IPv4 cụ thể như `192.168.50.50` |
 | `Network fuzzing requires authorized=true` | Chưa xác nhận quyền trong JSON/dashboard | Chỉ sau khi có quyền, đặt `authorized: true` hoặc tick xác nhận |
@@ -948,7 +948,7 @@ Khi sao lưu kết quả, tạo thư mục ngoài Git hoặc trong khu vực lư
 
 ### Trước campaign thật
 
-- [ ] PCAP là classic PCAP, IPv4 TCP/UDP và có seed.
+- [ ] PCAP/PCAPNG hợp lệ, có payload TCP/UDP (IPv4 hoặc IPv6) và có seed.
 - [ ] PCAP không chứa credential/token thật.
 - [ ] IP mục tiêu là private và đã kiểm tra lại trực tiếp.
 - [ ] `authorized=true`, `allow_public_target=false`.

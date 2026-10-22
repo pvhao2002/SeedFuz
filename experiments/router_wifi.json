@@ -1,0 +1,23 @@
+{
+  "name": "Router WiFi lab - web admin fuzz",
+  "seed_path": "datasets/sample_http.pcap",
+  "protocol": "tcp",
+  "target_host": "192.168.50.1",
+  "target_port": 80,
+  "authorized": true,
+  "allow_public_target": false,
+  "max_cases": 2000,
+  "delay_seconds": 0.1,
+  "timeout_seconds": 2.0,
+  "random_seed": 1337,
+  "smart_selection": true,
+  "state_aware": true,
+  "monitor_interval": 1.0,
+  "memory_probe_url": null,
+  "monitor_http_url": "http://192.168.50.1/",
+  "monitor_tcp_port": 80,
+  "preserve_session": false,
+  "crash_threshold": 2,
+  "recovery_command": null,
+  "recovery_wait_seconds": 30.0
+}

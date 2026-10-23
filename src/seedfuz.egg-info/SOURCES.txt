@@ -27,6 +27,7 @@ src/seedfuz/static/styles.css
 tests/test_api.py
 tests/test_campaign.py
 tests/test_config.py
+tests/test_monitor.py
 tests/test_mutation.py
 tests/test_pcap.py
 tests/test_state_machine.py

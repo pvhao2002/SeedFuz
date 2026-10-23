@@ -1,0 +1,5 @@
+sudo gpasswd -a $USER wireshark
+exec sudo -iu $USER
+groups                 # giờ phải thấy "wireshark"
+dumpcap -D             # ra danh sách card mạng là xong
+

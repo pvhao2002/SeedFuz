@@ -18,8 +18,9 @@ async function upload(file) {
     if (!response.ok) throw new Error(await response.text());
     capture = await response.json();
     $("#capture-summary").classList.remove("hidden");
-    $("#capture-summary").innerHTML = `<strong>${escapeHtml(capture.filename)}</strong><br>${capture.packet_count} packets · ${capture.seed_count} payload seeds · ${capture.protocols.join(", ")}`;
+    $("#capture-summary").innerHTML = `<strong>${escapeHtml(capture.filename)}</strong><br>${capture.packet_count} gói tin, ${capture.seed_count} payload seed, giao thức ${escapeHtml(capture.protocols.join(", "))}`;
     $("#run-button").disabled = capture.seed_count === 0;
+    $("#run-hint").textContent = capture.seed_count ? "File hợp lệ, bạn có thể chạy chiến dịch." : "File này không có payload nào để làm seed. Hãy chọn PCAP khác.";
     log("info", `PCAP hợp lệ: ${capture.seed_count} seed, ${Object.keys(capture.state_graph).length} trạng thái nguồn.`);
   } catch (error) { log("error", `Upload thất bại: ${error.message}`); }
 }
@@ -64,13 +65,13 @@ async function loadSecurity() {
   try {
     const data = await (await fetch("/api/security")).json();
     const summary = $("#security-summary");
-    if (data.vulnerable > 0) { summary.className = "badge failed"; summary.textContent = `⚠ ${data.vulnerable} thiết bị nghi lỗ hổng`; }
+    if (data.vulnerable > 0) { summary.className = "badge failed"; summary.textContent = `${data.vulnerable} thiết bị nghi lỗ hổng`; }
     else if (data.unreachable > 0) { summary.className = "badge stopped"; summary.textContent = `${data.unreachable} thiết bị mất kết nối`; }
     else { summary.className = "badge completed"; summary.textContent = "Không có cảnh báo"; }
     const box = $("#security-alerts");
     box.innerHTML = data.alerts.length
       ? data.alerts.map((a) => `<p class="error"><time>${a.created_at.slice(11,19)}</time>[security] ${escapeHtml(a.message)}${a.data && a.data.last_payload_hex ? `<br><code>payload: ${escapeHtml(String(a.data.last_payload_hex).slice(0,96))}…</code>` : ""}</p>`).join("")
-      : '<p class="muted">Chưa có cảnh báo an ninh. Hệ thống sẽ cảnh báo khi phát hiện thiết bị sập (nghi lỗ hổng).</p>';
+      : '<p class="muted">Chưa có cảnh báo. Khi thiết bị ngừng phản hồi trong lúc fuzz, cảnh báo sẽ hiện ở đây kèm payload cuối cùng.</p>';
   } catch (_) { /* keep prior view on transient failure */ }
 }
 
@@ -79,10 +80,13 @@ function updateCampaign(campaign) {
   $("#sent").textContent = metrics.sent_cases || 0;
   $("#speed").textContent = Number(metrics.packets_per_second || 0).toFixed(1);
   $("#crashes").textContent = metrics.crashes || 0;
+  $("#crash-card").classList.toggle("alert", (metrics.crashes || 0) > 0);
   $("#memory").textContent = metrics.memory_leak_rate == null ? "—" : Number(metrics.memory_leak_rate).toFixed(3);
   const total = metrics.total_cases || 0, sent = metrics.sent_cases || 0;
   $("#progress-label").textContent = `${sent} / ${total}`;
-  $("#progress-bar").style.width = `${total ? Math.min(100, sent / total * 100) : 0}%`;
+  const percent = total ? Math.min(100, sent / total * 100) : 0;
+  $("#progress-bar").style.width = `${percent}%`;
+  $("#progress-track").setAttribute("aria-valuenow", Math.round(percent));
   setStatus(campaign.status);
   $("#event-log").innerHTML = campaign.recent_events.length ? campaign.recent_events.map(eventLine).join("") : '<p class="muted">Chưa có sự kiện.</p>';
   const actions = $("#report-actions"); actions.classList.toggle("hidden", !["completed", "stopped", "failed"].includes(campaign.status));
@@ -90,14 +94,20 @@ function updateCampaign(campaign) {
   $("#pdf-link").href = `/api/campaigns/${campaign.id}/report.pdf`;
 }
 
+const STATUS_LABELS = {created:"Đang tạo",running:"Đang chạy",completed:"Hoàn tất",stopped:"Đã dừng",failed:"Thất bại"};
 function setStatus(status) {
   const badge = $("#status-badge"); badge.className = `badge ${status}`;
-  badge.textContent = ({created:"Đang tạo",running:"Đang chạy",completed:"Hoàn tất",stopped:"Đã dừng",failed:"Thất bại"})[status] || "Chưa chạy";
+  badge.textContent = STATUS_LABELS[status] || "Chưa chạy";
 }
 function eventLine(item) { return `<p class="${item.level}"><time>${item.created_at.slice(11,19)}</time>[${escapeHtml(item.kind)}] ${escapeHtml(item.message)}</p>`; }
 function log(level, message) { const consoleEl = $("#event-log"); if (consoleEl.querySelector(".muted")) consoleEl.innerHTML=""; consoleEl.insertAdjacentHTML("beforeend", `<p class="${level}"><time>${new Date().toLocaleTimeString("vi-VN")}</time>${escapeHtml(message)}</p>`); consoleEl.scrollTop = consoleEl.scrollHeight; }
 function escapeHtml(value) { const node=document.createElement("span"); node.textContent=String(value); return node.innerHTML; }
-$("#clear-log").addEventListener("click", () => $("#event-log").innerHTML='<p class="muted">Màn hình đã được xóa.</p>');
+$("#clear-log").addEventListener("click", () => $("#event-log").innerHTML='<p class="muted">Đã xóa nhật ký.</p>');
+
+function setServer(online) {
+  const el = $("#server-status"); el.className = `server-status ${online ? "online" : "offline"}`;
+  el.lastElementChild.textContent = online ? "Máy chủ đang hoạt động" : "Mất kết nối máy chủ";
+}
 
 let historyCache = [];
 function renderHistory() {
@@ -109,15 +119,17 @@ function renderHistory() {
     const sec = item.metrics.security_status || "pending";
     const vuln = sec === "vulnerable";
     return `<article${vuln ? ' class="vulnerable"' : ""}><h3>${escapeHtml(item.name)}</h3>`
-      + `<p><strong>${item.status}</strong> · ${item.created_at.slice(0,19).replace("T"," ")}</p>`
-      + `<p>${item.metrics.sent_cases || 0} cases · ${Number(item.metrics.packets_per_second || 0).toFixed(1)} pkt/s · ${item.metrics.crashes || 0} crash · <span class="sec-tag ${sec}">${SECURITY_LABELS[sec] || sec}</span></p></article>`;
-  }).join("") : '<p class="muted">Không có chiến dịch khớp bộ lọc.</p>';
+      + `<span><span class="badge ${escapeHtml(item.status)}">${STATUS_LABELS[item.status] || escapeHtml(item.status)}</span></span>`
+      + `<time>${item.created_at.slice(0,16).replace("T"," ")}</time>`
+      + `<p class="stats"><strong>${item.metrics.sent_cases || 0}</strong> test case, <strong>${Number(item.metrics.packets_per_second || 0).toFixed(1)}</strong> gói/giây, <strong>${item.metrics.crashes || 0}</strong> crash</p>`
+      + `<span class="sec-tag ${sec}">${SECURITY_LABELS[sec] || sec}</span></article>`;
+  }).join("") : (historyCache.length ? '<p class="muted">Không có chiến dịch nào khớp bộ lọc.</p>' : '<p class="muted">Chưa có chiến dịch nào. Nạp PCAP và chạy chiến dịch đầu tiên ở bảng bên trên.</p>');
 }
 async function loadHistory() {
   try {
     historyCache = await (await fetch("/api/campaigns")).json();
-    renderHistory();
-  } catch (_) { /* retain prior history on transient failures */ }
+    renderHistory(); setServer(true);
+  } catch (_) { setServer(false); /* retain prior history on transient failures */ }
 }
 $("#history-filter").addEventListener("input", renderHistory);
 $("#refresh-history").addEventListener("click", loadHistory);
